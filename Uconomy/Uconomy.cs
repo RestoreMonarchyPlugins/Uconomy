@@ -33,6 +33,7 @@ namespace fr34kyn01535.Uconomy
 
         protected override void Unload()
         {
+            Destroy(ExperienceService);
             U.Events.OnPlayerConnected -= Events_OnPlayerConnected;
 
             Logger.Log($"{Name} has been unloaded!", ConsoleColor.Yellow);

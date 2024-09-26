@@ -30,6 +30,7 @@ namespace fr34kyn01535.Uconomy.Services
 
         void OnDestroy()
         {
+            CancelInvoke(nameof(SyncPlayersExperience));
             U.Events.OnPlayerConnected -= OnPlayerConnected;
             U.Events.OnPlayerDisconnected -= OnPlayerDisconnected;
             PlayerSkills.OnExperienceChanged_Global -= OnExperienceChanged;

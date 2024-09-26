@@ -1,11 +1,12 @@
-﻿using Rocket.API;
+﻿using fr34kyn01535.Uconomy.Helpers;
+using Rocket.API;
 using Rocket.Core.Logging;
 using Rocket.Unturned.Chat;
 using Rocket.Unturned.Player;
 using System;
 using System.Collections.Generic;
 
-namespace fr34kyn01535.Uconomy
+namespace fr34kyn01535.Uconomy.Commands
 {
     public class CommandBalance : IRocketCommand
     {
@@ -47,8 +48,15 @@ namespace fr34kyn01535.Uconomy
 
         public void Execute(IRocketPlayer caller, params string[] command)
         {
-            decimal balance = Uconomy.Instance.Database.GetBalance(caller.Id);
-            UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_balance_show", balance, Uconomy.Instance.Configuration.Instance.MoneyName));
+            ThreadHelper.RunAsynchronously(() =>
+            {
+                decimal balance = Uconomy.Instance.Database.GetBalance(caller.Id);
+                ThreadHelper.RunSynchronously(() =>
+                {
+                    UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_balance_show", balance, Uconomy.Instance.Configuration.Instance.MoneyName));
+                });                
+            });
+            
         }
     }
 }

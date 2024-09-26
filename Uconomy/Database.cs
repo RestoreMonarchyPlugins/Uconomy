@@ -1,6 +1,10 @@
-﻿using MySql.Data.MySqlClient;
+﻿using fr34kyn01535.Uconomy.Helpers;
+using fr34kyn01535.Uconomy.Models;
+using MySql.Data.MySqlClient;
 using Rocket.Core.Logging;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace fr34kyn01535.Uconomy
 {
@@ -8,7 +12,6 @@ namespace fr34kyn01535.Uconomy
     {
         internal DatabaseManager()
         {
-            new I18N.West.CP1250(); //Workaround for database encoding issues with mono
             CheckSchema();
         }
 
@@ -71,7 +74,10 @@ namespace fr34kyn01535.Uconomy
                 object result = command.ExecuteScalar();
                 if (result != null) Decimal.TryParse(result.ToString(), out output);
                 connection.Close();
-                Uconomy.Instance.BalanceUpdated(id, increaseBy);
+                ThreadHelper.RunSynchronously(() =>
+                {
+                    Uconomy.Instance.BalanceUpdated(id, increaseBy);
+                });                
             }
             catch (Exception ex)
             {
@@ -106,7 +112,54 @@ namespace fr34kyn01535.Uconomy
             {
                 Logger.LogException(ex);
             }
+        }
 
+        public List<PlayerBalance> GetBalances(List<string> ids)
+        {
+            List<PlayerBalance> balances = new List<PlayerBalance>();
+            try
+            {
+                using (MySqlConnection connection = createConnection())
+                {
+                    string placeholders = string.Join(",", ids.Select(id => "?id" + id));
+                    string query = $"SELECT `steamId`, `balance` FROM `{Uconomy.Instance.Configuration.Instance.DatabaseTableName}` WHERE `steamId` IN ({placeholders})";
+
+                    MySqlCommand command = new MySqlCommand(query, connection);
+
+                    for (int i = 0; i < ids.Count; i++)
+                    {
+                        command.Parameters.AddWithValue("?id" + ids[i], ids[i]);
+                    }
+
+                    connection.Open();
+                    using (MySqlDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            balances.Add(new PlayerBalance
+                            {
+                                SteamId = reader.GetString("steamId"),
+                                Balance = reader.GetDecimal("balance")
+                            });
+                        }
+                    }
+                }
+
+                ThreadHelper.RunSynchronously(() =>
+                {
+                    // Trigger the event for each balance checked
+                    foreach (var balance in balances)
+                    {
+                        Uconomy.Instance.OnBalanceChecked(balance.SteamId, balance.Balance);
+                    }
+                });                
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException(ex);
+            }
+
+            return balances;
         }
 
         internal void CheckSchema()
@@ -121,7 +174,7 @@ namespace fr34kyn01535.Uconomy
 
                 if (test == null)
                 {
-                    command.CommandText = "CREATE TABLE `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` (`steamId` varchar(32) NOT NULL,`balance` decimal(15,2) NOT NULL DEFAULT '25.00',`lastUpdated` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00' ON UPDATE CURRENT_TIMESTAMP,PRIMARY KEY (`steamId`)) ";
+                    command.CommandText = "CREATE TABLE `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` (`steamId` varchar(32) NOT NULL,`balance` decimal(15,2) NOT NULL DEFAULT '25.00',`lastUpdated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,PRIMARY KEY (`steamId`)) ";
                     command.ExecuteNonQuery();
                 }
                 connection.Close();

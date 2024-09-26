@@ -1,13 +1,11 @@
 ﻿using Rocket.API;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace fr34kyn01535.Uconomy
 {
     public class UconomyConfiguration : IRocketPluginConfiguration
     {
+        public bool Debug;
+        public bool ShouldSerializeDebug() => Debug;
         public string DatabaseAddress;
         public string DatabaseUsername;
         public string DatabasePassword;
@@ -17,9 +15,12 @@ namespace fr34kyn01535.Uconomy
 
         public decimal InitialBalance;
         public string MoneyName;
+        public bool SyncExperience = false;
+        public float SyncIntervalSeconds = 5;
 
         public void LoadDefaults()
         {
+            Debug = false;
             DatabaseAddress = "localhost";
             DatabaseUsername = "unturned";
             DatabasePassword = "password";
@@ -28,6 +29,8 @@ namespace fr34kyn01535.Uconomy
             DatabasePort = 3306;
             InitialBalance = 30;
             MoneyName = "Credits";
+            SyncExperience = false;
+            SyncIntervalSeconds = 5;
         }
     }
 }

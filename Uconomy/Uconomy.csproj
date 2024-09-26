@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net48</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<RootNamespace>fr34kyn01535.Uconomy</RootNamespace>
+		<AssemblyName>Uconomy</AssemblyName>
+		<Version>2.0.0</Version>
+		<AssemblyTitle>Uconomy</AssemblyTitle>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="MySql.Data" Version="8.0.30" />
+	  <PackageReference Include="RestoreMonarchy.RocketRedist" Version="3.24.5.1" ExcludeAssets="runtime" />
+	</ItemGroup>
+
+</Project>

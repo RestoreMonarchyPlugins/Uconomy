@@ -1,5 +1,5 @@
 # Uconomy
-Basic economy system for in-game currency in Unturned. Updated and added experience sync.
+Add economy and in-game currency to your Unturned server.
 
 ## Credits
 Plugin originally created by [fr34kyn01535](https://github.com/fr34kyn01535). We forked it to add some features and update libraries.

@@ -20,6 +20,7 @@ namespace fr34kyn01535.Uconomy
         {
             Instance = this;
             Database = new DatabaseManager();
+            Database.CheckSchema();
 
             if (Configuration.Instance.SyncExperience)
             {

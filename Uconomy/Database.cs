@@ -4,117 +4,151 @@ using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Data;
 
 namespace fr34kyn01535.Uconomy
 {
     public class DatabaseManager
     {
-        private MySqlConnection createConnection()
-        {
-            MySqlConnection connection = null;
-            if (Uconomy.Instance.Configuration.Instance.DatabasePort == 0) Uconomy.Instance.Configuration.Instance.DatabasePort = 3306;
-            connection = new MySqlConnection(String.Format("SERVER={0};DATABASE={1};UID={2};PASSWORD={3};PORT={4};", Uconomy.Instance.Configuration.Instance.DatabaseAddress, Uconomy.Instance.Configuration.Instance.DatabaseName, Uconomy.Instance.Configuration.Instance.DatabaseUsername, Uconomy.Instance.Configuration.Instance.DatabasePassword, Uconomy.Instance.Configuration.Instance.DatabasePort));
+        private readonly string _connectionString;
+        private const string TABLE_PLACEHOLDER = "Uconomy";
 
-            return connection;
+        public DatabaseManager()
+        {
+            MySqlConnectionStringBuilder builder = new MySqlConnectionStringBuilder
+            {
+                Server = Uconomy.Instance.Configuration.Instance.DatabaseAddress,
+                Database = Uconomy.Instance.Configuration.Instance.DatabaseName,
+                UserID = Uconomy.Instance.Configuration.Instance.DatabaseUsername,
+                Password = Uconomy.Instance.Configuration.Instance.DatabasePassword,
+                Port = (uint)(Uconomy.Instance.Configuration.Instance.DatabasePort == 0 ? 3306 : Uconomy.Instance.Configuration.Instance.DatabasePort),
+                ConnectionTimeout = 30,
+                DefaultCommandTimeout = 30
+            };
+
+            _connectionString = builder.ConnectionString;
         }
 
-        /// <summary>
-        /// returns the current balance of an account
-        /// </summary>
-        /// <param name="steamId"></param>
-        /// <returns></returns>
+        private string Query(string sql)
+        {
+            return sql.Replace(TABLE_PLACEHOLDER, Uconomy.Instance.Configuration.Instance.DatabaseTableName);
+        }
+
+        private MySqlConnection CreateConnection()
+        {
+            return new MySqlConnection(_connectionString);
+        }
+
         public decimal GetBalance(string id)
         {
-            decimal output = 0;
-            MySqlConnection connection = createConnection();
-            MySqlCommand command = connection.CreateCommand();
-            command.CommandText = "select `balance` from `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` where `steamId` = '" + id.ToString() + "';";
+            const string sql = "SELECT `balance` FROM `Uconomy` WHERE `steamId` = @steamId";
+
+            MySqlConnection connection = CreateConnection();
+            MySqlCommand command = new MySqlCommand(Query(sql), connection);
+            command.Parameters.Add("@steamId", MySqlDbType.VarChar, 32).Value = id;
+
             connection.Open();
             object result = command.ExecuteScalar();
-            if (result != null) Decimal.TryParse(result.ToString(), out output);
             connection.Close();
-            Uconomy.Instance.OnBalanceChecked(id, output);
 
-            return output;
+            decimal balance = result != null && decimal.TryParse(result.ToString(), out decimal parsed)
+                ? parsed
+                : 0m;
+
+            Uconomy.Instance.OnBalanceChecked(id, balance);
+            return balance;
         }
 
-        /// <summary>
-        /// Increasing balance to increaseBy (can be negative)
-        /// </summary>
-        /// <param name="steamId">steamid of the accountowner</param>
-        /// <param name="increaseBy">amount to change</param>
-        /// <returns>the new balance</returns>
         public decimal IncreaseBalance(string id, decimal increaseBy)
         {
-            decimal output = 0;
-            MySqlConnection connection = createConnection();
-            MySqlCommand command = connection.CreateCommand();
-            command.CommandText = "update `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` set `balance` = balance + (" + increaseBy + ") where `steamId` = '" + id.ToString() + "'; select `balance` from `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` where `steamId` = '" + id.ToString() + "'";
+            const string sql = @"
+                UPDATE `Uconomy` 
+                SET `balance` = balance + @increaseAmount 
+                WHERE `steamId` = @steamId;
+                
+                SELECT `balance` 
+                FROM `Uconomy` 
+                WHERE `steamId` = @steamId";
+
+            MySqlConnection connection = CreateConnection();
+            MySqlCommand command = new MySqlCommand(Query(sql), connection);
+            command.Parameters.Add("@steamId", MySqlDbType.VarChar, 32).Value = id;
+            command.Parameters.Add("@increaseAmount", MySqlDbType.Decimal).Value = increaseBy;
+
             connection.Open();
             object result = command.ExecuteScalar();
-            if (result != null) Decimal.TryParse(result.ToString(), out output);
             connection.Close();
+
+            decimal balance = result != null && decimal.TryParse(result.ToString(), out decimal parsed)
+                ? parsed
+                : 0m;
+
             ThreadHelper.RunSynchronously(() =>
             {
                 Uconomy.Instance.BalanceUpdated(id, increaseBy);
             });
-            return output;
+
+            return balance;
         }
 
-        
         public void CheckSetupAccount(Steamworks.CSteamID id)
         {
-            MySqlConnection connection = createConnection();
-            MySqlCommand command = connection.CreateCommand();
-            int exists = 0;
-            command.CommandText = "SELECT EXISTS(SELECT 1 FROM `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` WHERE `steamId` ='" + id + "' LIMIT 1);";
-            connection.Open();
-            object result = command.ExecuteScalar();
-            if (result != null) Int32.TryParse(result.ToString(), out exists);
-            connection.Close();
+            const string sql = @"
+                INSERT IGNORE INTO `Uconomy` 
+                    (balance, steamId, lastUpdated) 
+                VALUES 
+                    (@initialBalance, @steamId, NOW())";
 
-            if (exists == 0)
-            {
-                command.CommandText = "insert ignore into `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` (balance,steamId,lastUpdated) values(" + Uconomy.Instance.Configuration.Instance.InitialBalance + ",'" + id.ToString() + "',now())";
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
-            }
+            MySqlConnection connection = CreateConnection();
+            MySqlCommand command = new MySqlCommand(Query(sql), connection);
+            command.Parameters.Add("@steamId", MySqlDbType.VarChar, 32).Value = id.ToString();
+            command.Parameters.Add("@initialBalance", MySqlDbType.Decimal).Value =
+                Uconomy.Instance.Configuration.Instance.InitialBalance;
+
+            connection.Open();
+            command.ExecuteNonQuery();
+            connection.Close();
         }
 
         public List<PlayerBalance> GetBalances(List<string> ids)
         {
+            if (ids == null || !ids.Any())
+                return new List<PlayerBalance>();
+
             List<PlayerBalance> balances = new List<PlayerBalance>();
-            using (MySqlConnection connection = createConnection())
+            List<string> parameters = ids.Select((id, index) => $"@id{index}").ToList();
+
+            string sql = $@"
+                SELECT `steamId`, `balance` 
+                FROM `Uconomy` 
+                WHERE `steamId` IN ({string.Join(",", parameters)})";
+
+            MySqlConnection connection = CreateConnection();
+            MySqlCommand command = new MySqlCommand(Query(sql), connection);
+
+            for (int i = 0; i < ids.Count; i++)
             {
-                string placeholders = string.Join(",", ids.Select(id => "?id" + id));
-                string query = $"SELECT `steamId`, `balance` FROM `{Uconomy.Instance.Configuration.Instance.DatabaseTableName}` WHERE `steamId` IN ({placeholders})";
-
-                MySqlCommand command = new MySqlCommand(query, connection);
-
-                for (int i = 0; i < ids.Count; i++)
-                {
-                    command.Parameters.AddWithValue("?id" + ids[i], ids[i]);
-                }
-
-                connection.Open();
-                using (MySqlDataReader reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        balances.Add(new PlayerBalance
-                        {
-                            SteamId = reader.GetString("steamId"),
-                            Balance = reader.GetDecimal("balance")
-                        });
-                    }
-                }
+                command.Parameters.Add($"@id{i}", MySqlDbType.VarChar, 32).Value = ids[i];
             }
+
+            connection.Open();
+            MySqlDataReader reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                balances.Add(new PlayerBalance
+                {
+                    SteamId = reader.GetString("steamId"),
+                    Balance = reader.GetDecimal("balance")
+                });
+            }
+
+            reader.Close();
+            connection.Close();
 
             ThreadHelper.RunSynchronously(() =>
             {
-                // Trigger the event for each balance checked
-                foreach (var balance in balances)
+                foreach (PlayerBalance balance in balances)
                 {
                     Uconomy.Instance.OnBalanceChecked(balance.SteamId, balance.Balance);
                 }
@@ -123,19 +157,20 @@ namespace fr34kyn01535.Uconomy
             return balances;
         }
 
-        internal void CheckSchema()
+        public void CheckSchema()
         {
-            MySqlConnection connection = createConnection();
-            MySqlCommand command = connection.CreateCommand();
-            command.CommandText = "show tables like '" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "'";
-            connection.Open();
-            object test = command.ExecuteScalar();
+            const string sql = @"
+                CREATE TABLE IF NOT EXISTS `Uconomy` (
+                    `steamId` VARCHAR(32) NOT NULL,
+                    `balance` DECIMAL(15,2) NOT NULL DEFAULT '25.00',
+                    `lastUpdated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`steamId`)
+                )";
 
-            if (test == null)
-            {
-                command.CommandText = "CREATE TABLE `" + Uconomy.Instance.Configuration.Instance.DatabaseTableName + "` (`steamId` varchar(32) NOT NULL,`balance` decimal(15,2) NOT NULL DEFAULT '25.00',`lastUpdated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,PRIMARY KEY (`steamId`)) ";
-                command.ExecuteNonQuery();
-            }
+            MySqlConnection connection = CreateConnection();
+            MySqlCommand command = new MySqlCommand(Query(sql), connection);
+            connection.Open();
+            command.ExecuteNonQuery();
             connection.Close();
         }
     }

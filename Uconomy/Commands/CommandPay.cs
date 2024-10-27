@@ -1,5 +1,6 @@
 ﻿using fr34kyn01535.Uconomy.Helpers;
 using Rocket.API;
+using Rocket.Core.Logging;
 using Rocket.Unturned.Chat;
 using Rocket.Unturned.Player;
 using System.Collections.Generic;
@@ -75,6 +76,7 @@ namespace fr34kyn01535.Uconomy.Commands
                         Uconomy.Instance.Database.IncreaseBalance(otherPlayer.Id, amount);
                         ThreadHelper.RunSynchronously(() =>
                         {
+                            Logger.Log($"{caller.DisplayName} paid {otherPlayer.DisplayName} {amount} {Uconomy.Instance.Configuration.Instance.MoneyName}.");
                             UnturnedChat.Say(otherPlayer.CSteamID, Uconomy.Instance.Translations.Instance.Translate("command_pay_console", amount, Uconomy.Instance.Configuration.Instance.MoneyName));
                         });                        
                     }

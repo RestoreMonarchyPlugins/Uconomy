@@ -1,7 +1,6 @@
 ﻿using fr34kyn01535.Uconomy.Helpers;
 using Rocket.API;
 using Rocket.Core.Logging;
-using Rocket.Unturned.Chat;
 using Rocket.Unturned.Player;
 using System.Collections.Generic;
 
@@ -9,63 +8,45 @@ namespace fr34kyn01535.Uconomy.Commands
 {
     public class CommandPay : IRocketCommand
     {
-        public string Help
-        {
-            get { return "Pays a specific player money from your account"; }
-        }
-
-        public string Name
-        {
-            get { return "pay"; }
-        }
-
-        public AllowedCaller AllowedCaller
-        {
-            get
-            {
-                return AllowedCaller.Both;
-            }
-        }
-
-        public string Syntax
-        {
-            get { return "<player> <amount>"; }
-        }
-
-        public List<string> Aliases
-        {
-            get { return new List<string> { "pagar" }; }
-        }
-
-        public List<string> Permissions
-        {
-            get
-            {
-                return new List<string>() { "uconomy.pay" };
-            }
-        }
+        private Uconomy pluginInstance => Uconomy.Instance;
 
         public void Execute(IRocketPlayer caller, params string[] command)
         {
             if (command.Length != 2)
             {
-                UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_pay_invalid"));
+                pluginInstance.SendMessageToPlayer(caller, "command_pay_invalid");
                 return;
             }
 
             UnturnedPlayer otherPlayer = UnturnedPlayer.FromName(command[0]);
-            if (otherPlayer != null)
+            string steamId = null;
+            string displayName = null;
+
+            if (otherPlayer == null)
             {
-                if (caller == otherPlayer)
+                if (ulong.TryParse(command[0], out ulong steamIdLong))
                 {
-                    UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_pay_error_pay_self"));
+                    steamId = steamIdLong.ToString();
+                    displayName = steamIdLong.ToString();
+                }                
+            } else
+            {
+                steamId = otherPlayer.Id;
+                displayName = otherPlayer.DisplayName;
+            }
+
+            if (steamId != null)
+            {
+                if (caller.Id == steamId)
+                {
+                    pluginInstance.SendMessageToPlayer(caller, "command_pay_error_pay_self");
                     return;
                 }
 
                 decimal amount = 0;
                 if (!decimal.TryParse(command[1], out amount) || amount <= 0)
                 {
-                    UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_pay_error_invalid_amount"));
+                    pluginInstance.SendMessageToPlayer(caller, "command_pay_error_invalid_amount");
                     return;
                 }
 
@@ -73,43 +54,63 @@ namespace fr34kyn01535.Uconomy.Commands
                 {
                     if (caller is ConsolePlayer)
                     {
-                        Uconomy.Instance.Database.IncreaseBalance(otherPlayer.Id, amount);
+                        pluginInstance.Database.IncreaseBalance(steamId, amount);
                         ThreadHelper.RunSynchronously(() =>
                         {
-                            Logger.Log($"{caller.DisplayName} paid {otherPlayer.DisplayName} {amount} {Uconomy.Instance.Configuration.Instance.MoneyName}.");
-                            UnturnedChat.Say(otherPlayer.CSteamID, Uconomy.Instance.Translations.Instance.Translate("command_pay_console", amount, Uconomy.Instance.Configuration.Instance.MoneyName));
-                        });                        
+                            string moneyName = pluginInstance.Configuration.Instance.MoneyName;
+                            Logger.Log($"{caller.DisplayName} paid {displayName} {amount} {moneyName}.");
+                            if (otherPlayer != null)
+                            {
+                                pluginInstance.SendMessageToPlayer(otherPlayer, "command_pay_console", amount, moneyName);
+                            }                                
+                        });
                     }
                     else
                     {
-                        decimal myBalance = Uconomy.Instance.Database.GetBalance(caller.Id);
+                        decimal myBalance = pluginInstance.Database.GetBalance(caller.Id);
                         if (myBalance - amount <= 0)
                         {
                             ThreadHelper.RunSynchronously(() =>
                             {
-                                UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_pay_error_cant_afford"));
-                            });                            
+                                pluginInstance.SendMessageToPlayer(caller, "command_pay_error_cant_afford");
+                            });
                             return;
                         }
                         else
                         {
-                            Uconomy.Instance.Database.IncreaseBalance(caller.Id, -amount);
-                            Uconomy.Instance.Database.IncreaseBalance(otherPlayer.Id, amount);
+                            pluginInstance.Database.IncreaseBalance(caller.Id, -amount);
+                            pluginInstance.Database.IncreaseBalance(steamId, amount);
 
                             ThreadHelper.RunSynchronously(() =>
                             {
-                                UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_pay_private", otherPlayer.CharacterName, amount, Uconomy.Instance.Configuration.Instance.MoneyName));
-                                UnturnedChat.Say(otherPlayer.CSteamID, Uconomy.Instance.Translations.Instance.Translate("command_pay_other_private", amount, Uconomy.Instance.Configuration.Instance.MoneyName, caller.DisplayName));
-                                Uconomy.Instance.HasBeenPayed((UnturnedPlayer)caller, otherPlayer, amount);
-                            });                            
+                                string moneyName = pluginInstance.Configuration.Instance.MoneyName;
+                                pluginInstance.SendMessageToPlayer(caller, "command_pay_private", displayName, amount, moneyName);
+                                if (otherPlayer != null)
+                                {
+                                    pluginInstance.SendMessageToPlayer(otherPlayer, "command_pay_other_private", amount, moneyName, caller.DisplayName);
+                                    pluginInstance.HasBeenPayed((UnturnedPlayer)caller, otherPlayer, amount);
+                                }                                
+                            });
                         }
                     }
                 });
             }
             else
             {
-                UnturnedChat.Say(caller, Uconomy.Instance.Translations.Instance.Translate("command_pay_error_player_not_found"));
+                pluginInstance.SendMessageToPlayer(caller, "command_pay_error_player_not_found");
             }
         }
+
+        public string Help => "Pays a specific player money from your account";
+
+        public string Name => "pay";
+
+        public AllowedCaller AllowedCaller => AllowedCaller.Both;
+
+        public string Syntax => "<player> <amount>";
+
+        public List<string> Aliases => new List<string> { "pagar" };
+
+        public List<string> Permissions => new List<string>() { "uconomy.pay" };
     }
 }

@@ -33,12 +33,13 @@ namespace fr34kyn01535.Uconomy.Services
             StopAllCoroutines();
         }
 
-         
+
         private void OnPlayerConnected(UnturnedPlayer player)
         {
             if (Uconomy.Instance.Configuration.Instance.EnableSalaries)
             {
-                StartCoroutine(GiveSalary(player.CSteamID));
+                var coroutine = StartCoroutine(GiveSalary(player.CSteamID));
+                coroutines[player.CSteamID] = coroutine;
             }
         }
 
@@ -60,6 +61,7 @@ namespace fr34kyn01535.Uconomy.Services
                 Player player = PlayerTool.getPlayer(steamID);
                 if (player == null)
                 {
+                    coroutines.Remove(steamID);
                     yield break;
                 }
 

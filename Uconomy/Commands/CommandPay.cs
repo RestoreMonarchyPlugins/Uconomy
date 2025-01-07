@@ -68,7 +68,7 @@ namespace fr34kyn01535.Uconomy.Commands
                     else
                     {
                         decimal myBalance = pluginInstance.Database.GetBalance(caller.Id);
-                        if (myBalance - amount <= 0)
+                        if (myBalance - amount < 0)
                         {
                             ThreadHelper.RunSynchronously(() =>
                             {
@@ -78,19 +78,44 @@ namespace fr34kyn01535.Uconomy.Commands
                         }
                         else
                         {
-                            pluginInstance.Database.IncreaseBalance(caller.Id, -amount);
-                            pluginInstance.Database.IncreaseBalance(steamId, amount);
-
-                            ThreadHelper.RunSynchronously(() =>
+                            if (pluginInstance.Configuration.Instance.SyncExperience)
                             {
-                                string moneyName = pluginInstance.Configuration.Instance.MoneyName;
-                                pluginInstance.SendMessageToPlayer(caller, "command_pay_private", displayName, amount, moneyName);
-                                if (otherPlayer != null)
+                                ThreadHelper.RunSynchronously(() =>
                                 {
-                                    pluginInstance.SendMessageToPlayer(otherPlayer, "command_pay_other_private", amount, moneyName, caller.DisplayName);
-                                    pluginInstance.HasBeenPayed((UnturnedPlayer)caller, otherPlayer, amount);
-                                }                                
-                            });
+                                    UnturnedPlayer player = (UnturnedPlayer)caller;
+                                    if (player != null)
+                                    {
+                                        pluginInstance.ExperienceService.SetPlayerExperience(player.Player, 0);
+                                    }
+
+                                    ThreadHelper.RunAsynchronously(() =>
+                                    {
+                                        pluginInstance.Database.IncreaseBalance(caller.Id, -amount);
+                                        pluginInstance.Database.IncreaseBalance(steamId, amount);
+
+                                        FinishPayment();
+                                    });
+                                });
+                            } else
+                            {
+                                pluginInstance.Database.IncreaseBalance(caller.Id, -amount);
+                                pluginInstance.Database.IncreaseBalance(steamId, amount);
+                                FinishPayment();
+                            }
+
+                            void FinishPayment()
+                            {
+                                ThreadHelper.RunSynchronously(() =>
+                                {
+                                    string moneyName = pluginInstance.Configuration.Instance.MoneyName;
+                                    pluginInstance.SendMessageToPlayer(caller, "command_pay_private", displayName, amount, moneyName);
+                                    if (otherPlayer != null)
+                                    {
+                                        pluginInstance.SendMessageToPlayer(otherPlayer, "command_pay_other_private", amount, moneyName, caller.DisplayName);
+                                        pluginInstance.HasBeenPayed((UnturnedPlayer)caller, otherPlayer, amount);
+                                    }
+                                });
+                            }
                         }
                     }
                 });

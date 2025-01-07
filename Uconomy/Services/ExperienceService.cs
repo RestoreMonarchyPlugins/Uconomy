@@ -7,6 +7,7 @@ using Steamworks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using UnityEngine;
 using Logger = Rocket.Core.Logging.Logger;
 
@@ -14,17 +15,17 @@ namespace fr34kyn01535.Uconomy.Services
 {
     public class ExperienceService : MonoBehaviour
     {
+        private const uint MAX_EXPERIENCE = uint.MaxValue;
+        private const uint MIN_EXPERIENCE = 0;
+
         private Uconomy pluginInstance => Uconomy.Instance;
         private UconomyConfiguration configuration => pluginInstance.Configuration.Instance;
-
-        private Dictionary<CSteamID, bool> ignoreEvent = [];
         public bool IsSynchronizing { get; private set; } = false;
 
         void Start()
         {
             InvokeRepeating(nameof(SyncPlayersExperience), 0, configuration.SyncIntervalSeconds);
             U.Events.OnPlayerConnected += OnPlayerConnected;
-            U.Events.OnPlayerDisconnected += OnPlayerDisconnected;
             PlayerSkills.OnExperienceChanged_Global += OnExperienceChanged;
         }
 
@@ -32,51 +33,65 @@ namespace fr34kyn01535.Uconomy.Services
         {
             CancelInvoke(nameof(SyncPlayersExperience));
             U.Events.OnPlayerConnected -= OnPlayerConnected;
-            U.Events.OnPlayerDisconnected -= OnPlayerDisconnected;
             PlayerSkills.OnExperienceChanged_Global -= OnExperienceChanged;
+        }
+
+        private uint ClampExperience(decimal balance)
+        {
+            if (balance < MIN_EXPERIENCE)
+                return MIN_EXPERIENCE;
+            if (balance > MAX_EXPERIENCE)
+                return MAX_EXPERIENCE;
+            return (uint)balance;
+        }
+
+        public void SetPlayerExperience(Player player, uint experience)
+        {
+            PlayerSkills.OnExperienceChanged_Global -= OnExperienceChanged;
+            try
+            {
+                player.skills.ServerSetExperience(experience);
+            }
+            finally
+            {
+                PlayerSkills.OnExperienceChanged_Global += OnExperienceChanged;
+            }
         }
 
         private void OnPlayerConnected(UnturnedPlayer player)
         {
-            ignoreEvent[player.CSteamID] = true;
-            player.Experience = 0;
+            SetPlayerExperience(player.Player, player.Experience);
 
             ThreadHelper.RunAsynchronously(() =>
             {
                 decimal balance = Uconomy.Instance.Database.GetBalance(player.CSteamID.ToString());
                 ThreadHelper.RunSynchronously(() =>
                 {
-                    ignoreEvent[player.CSteamID] = true;
-                    player.Experience = (uint)balance;
+                    SetPlayerExperience(player.Player, ClampExperience(balance));
                 });
             });
         }
 
-        private void OnPlayerDisconnected(UnturnedPlayer player)
-        {
-            ignoreEvent.Remove(player.CSteamID);
-        }
-
         private void OnExperienceChanged(PlayerSkills skills, uint lastKnownExperience)
         {
-            CSteamID steamID = skills.player.channel.owner.playerID.steamID;
-            uint experience = skills.experience;
-                        
-            if (!ignoreEvent.TryGetValue(steamID, out bool ignore) || ignore)
+            try
             {
-                ignoreEvent[steamID] = false;
-            } else
-            {
-                int experienceDifference = (int)experience - (int)lastKnownExperience;
+                uint experience = skills.experience;
+                long experienceDifference = (long)experience - (long)lastKnownExperience;
 
                 if (experienceDifference != 0)
                 {
                     decimal balanceChange = experienceDifference;
                     ThreadHelper.RunAsynchronously(() =>
                     {
-                        Uconomy.Instance.Database.IncreaseBalance(steamID.ToString(), balanceChange);
+                        string steamId = skills.player.channel.owner.playerID.steamID.ToString();
+                        Uconomy.Instance.Database.IncreaseBalance(steamId, balanceChange);
                     });
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException(ex);
             }
         }
 
@@ -99,36 +114,49 @@ namespace fr34kyn01535.Uconomy.Services
 
             ThreadHelper.RunAsynchronously(() =>
             {
-                List<PlayerBalance> playerBalances = Uconomy.Instance.Database.GetBalances(playerIds);
-                pluginInstance.LogDebug($"Synchronizing {playerBalances.Count} player experiences.");
-
-                ThreadHelper.RunSynchronously(() =>
+                try
                 {
-                    try
-                    {
-                        foreach (PlayerBalance playerBalance in playerBalances)
-                        {
-                            CSteamID steamID = new(Convert.ToUInt64(playerBalance.SteamId));
-                            Player player = PlayerTool.getPlayer(steamID);
+                    List<PlayerBalance> playerBalances = Uconomy.Instance.Database.GetBalances(playerIds);
+                    pluginInstance.LogDebug($"Synchronizing {playerBalances.Count} player experiences.");
 
-                            uint experienceBalance = (uint)playerBalance.Balance;
-                            if (player.skills.experience == experienceBalance)
+                    ThreadHelper.RunSynchronously(() =>
+                    {
+                        PlayerSkills.OnExperienceChanged_Global -= OnExperienceChanged;
+                        try
+                        {
+                            foreach (PlayerBalance playerBalance in playerBalances)
                             {
-                                continue;
+                                CSteamID steamID = new(Convert.ToUInt64(playerBalance.SteamId));
+                                Player player = PlayerTool.getPlayer(steamID);
+
+                                if (player == null)
+                                    continue;
+
+                                uint experienceBalance = ClampExperience(playerBalance.Balance);
+                                if (player.skills.experience == experienceBalance)
+                                    continue;
+
+                                player.skills.ServerSetExperience(experienceBalance);
                             }
 
-                            ignoreEvent[steamID] = true;
-                            player.skills.ServerSetExperience(experienceBalance);
+                            pluginInstance.LogDebug($"Synchronized {playerBalances.Count} player experiences.");
                         }
-
-                        IsSynchronizing = false;
-                        pluginInstance.LogDebug($"Synchronized {playerBalances.Count} player experiences.");
-                    } catch (Exception e)
-                    {
-                        IsSynchronizing = false;
-                        Logger.LogException(e);
-                    }                    
-                });
+                        catch (Exception e)
+                        {
+                            Logger.LogException(e);
+                        }
+                        finally
+                        {
+                            PlayerSkills.OnExperienceChanged_Global += OnExperienceChanged;
+                            IsSynchronizing = false;
+                        }
+                    });
+                }
+                catch (Exception e)
+                {
+                    IsSynchronizing = false;
+                    Logger.LogException(e);
+                }
             });
         }
     }

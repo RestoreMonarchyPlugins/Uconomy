@@ -5,6 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Data;
+using Rocket.Unturned.Player;
+using SDG.Unturned;
+using Steamworks;
 
 namespace fr34kyn01535.Uconomy
 {

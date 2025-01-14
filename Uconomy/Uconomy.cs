@@ -33,6 +33,8 @@ namespace fr34kyn01535.Uconomy
             if (Configuration.Instance.SyncExperience)
             {
                 ExperienceService = gameObject.AddComponent<ExperienceService>();
+                Provider.modeConfigData.Players.Lose_Experience_PvP = 1;
+                Provider.modeConfigData.Players.Lose_Experience_PvE = 1;
             }
 
             if (Configuration.Instance.EnableSalaries)
@@ -41,7 +43,7 @@ namespace fr34kyn01535.Uconomy
             }
 
             U.Events.OnPlayerConnected += Events_OnPlayerConnected;
-
+             
             Logger.Log($"{Name} {Assembly.GetName().Version} has been loaded!", ConsoleColor.Yellow);
             Logger.Log("Check out more Unturned plugins at restoremonarchy.com");
         }

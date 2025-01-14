@@ -46,7 +46,6 @@ namespace fr34kyn01535.Uconomy
             MoneyName = "credits";
             SyncExperience = false;
             SyncIntervalSeconds = 5;
-
             EnableSalaries = false;
             SalaryIntervalSeconds = 900;
             SalaryGroups =

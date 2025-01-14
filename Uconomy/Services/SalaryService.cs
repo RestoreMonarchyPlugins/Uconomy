@@ -24,6 +24,13 @@ namespace fr34kyn01535.Uconomy.Services
         {
             U.Events.OnPlayerConnected += OnPlayerConnected;
             U.Events.OnPlayerDisconnected += OnPlayerDisconnected;
+
+            foreach (Player player in PlayerTool.EnumeratePlayers())
+            {
+                CSteamID steamID = player.channel.owner.playerID.steamID;
+                var coroutine = StartCoroutine(GiveSalary(steamID));
+                coroutines[steamID] = coroutine;
+            }
         }
 
         void OnDestroy()

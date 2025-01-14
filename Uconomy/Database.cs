@@ -4,10 +4,7 @@ using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Data;
-using Rocket.Unturned.Player;
-using SDG.Unturned;
-using Steamworks;
+using System.Threading;
 
 namespace fr34kyn01535.Uconomy
 {
@@ -34,6 +31,12 @@ namespace fr34kyn01535.Uconomy
 
         private string Query(string sql)
         {
+            if (Uconomy.Instance.Configuration.Instance.Debug)
+            {
+                int random = new Random().Next(0, 1000);
+                Thread.Sleep(random);
+            }
+
             return sql.Replace(TABLE_PLACEHOLDER, Uconomy.Instance.Configuration.Instance.DatabaseTableName);
         }
 

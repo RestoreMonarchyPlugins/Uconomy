@@ -9,7 +9,7 @@ using System.Threading;
 namespace fr34kyn01535.Uconomy
 {
     public class DatabaseManager
-    {
+    {   
         private readonly string _connectionString;
         private const string TABLE_PLACEHOLDER = "Uconomy";
 

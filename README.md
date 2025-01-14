@@ -1,6 +1,16 @@
 # Uconomy
 Add economy and in-game currency to your Unturned server.
 
+## Features
+* In-game currency system used by lot of other plugins
+* Commands for checking and sending money
+* Configurable salary system
+* Experimental experience as currency sync with MySQL database (SyncExperience)
+
+> **💡 PRO TIP**  
+> **SyncExperience** is experimental and may cause experience sync issues.  
+> Consider using [UconomyXP](https://restoremonarchy.com/servers/plugins/uconomyxp) instead for more reliable experience sync.
+
 ## Credits
 Plugin originally created by [fr34kyn01535](https://github.com/fr34kyn01535). We forked it to add some features and update libraries.
 
@@ -15,6 +25,7 @@ Plugin originally created by [fr34kyn01535](https://github.com/fr34kyn01535). We
 <Permission Cooldown="0">bal</Permission>
 <Permission Cooldown="0">pay</Permission>
 ```
+
 ## Configuration
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -29,6 +40,7 @@ Plugin originally created by [fr34kyn01535](https://github.com/fr34kyn01535). We
   <DatabasePort>3306</DatabasePort>
   <InitialBalance>30</InitialBalance>
   <MoneyName>credits</MoneyName>
+  <Comment>Use SyncExperience only with stable local/network MySQL connections. Otherwise use UconomyXP plugin.</Comment>
   <SyncExperience>false</SyncExperience>
   <SyncIntervalSeconds>5</SyncIntervalSeconds>
   <EnableSalaries>false</EnableSalaries>

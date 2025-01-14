@@ -15,15 +15,14 @@ namespace fr34kyn01535.Uconomy
         public string DatabaseName;
         public string DatabaseTableName;
         public int DatabasePort;
-
         public decimal InitialBalance;
         public string MoneyName;
+        public string Comment = "Use SyncExperience only with stable local/network MySQL connections. Otherwise use UconomyXP plugin.";
         public bool SyncExperience = false;
         public float SyncIntervalSeconds = 5;
-
         public bool EnableSalaries = false;
         public float SalaryIntervalSeconds = 900;
-        public SalaryGroup[] SalaryGroups = 
+        public SalaryGroup[] SalaryGroups =
         [
             new SalaryGroup("default", 10),
             new SalaryGroup("vip", 30),
@@ -35,7 +34,6 @@ namespace fr34kyn01535.Uconomy
             Debug = false;
             MessageColor = "yellow";
             MessageIconUrl = "https://i.imgur.com/dMDcc9J.png";
-
             DatabaseAddress = "localhost";
             DatabaseUsername = "unturned";
             DatabasePassword = "password";
